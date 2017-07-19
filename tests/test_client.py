@@ -5,7 +5,8 @@ import unittest
 
 from aiosparql.client import SPARQLQueryFormatter, SPARQLRequestFailed
 from aiosparql.syntax import IRI, RDF, Triples
-from aiosparql.test_utils import AioSPARQLTestCase, unittest_run_loop
+from aiosparql.test_utils import (
+    AioSPARQLTestCase, TestSPARQLClient, unittest_run_loop)
 
 
 async def sparql_endpoint(request):
@@ -81,6 +82,37 @@ class Client(AioSPARQLTestCase):
             }"""))
         with self.assertRaises(SPARQLRequestFailed):
             await self.client.update("failure")
+
+
+class ClientCustomPrefixes(AioSPARQLTestCase):
+    client_kwargs = {
+        "endpoint": "/sparql",
+        "update_endpoint": "/sparql-update",
+        "graph": IRI("http://mu.semte.ch/test-application"),
+        "prefixes": {
+            "foo": IRI("http://foo#"),
+            "bar": IRI("http://bar#"),
+            "baz": IRI("http://baz#"),
+        },
+    }
+
+    async def get_application(self):
+        app = web.Application()
+        app.router.add_post('/sparql', sparql_endpoint)
+        app.router.add_post('/sparql-update', sparql_endpoint)
+        return app
+
+    @unittest_run_loop
+    async def test_custom_prefixes(self):
+        res = await self.client.query("noop")
+        self.assertEqual(res['post']['query'], dedent("""\
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+            PREFIX bar: <http://bar#>
+            PREFIX baz: <http://baz#>
+            PREFIX foo: <http://foo#>
+
+            noop"""))
 
 
 class Formatter(unittest.TestCase):
